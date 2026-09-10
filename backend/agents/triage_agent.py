@@ -18,11 +18,11 @@ def triage_agent(input: TriageInput) -> ReproductionInput:
     
     Classify it as one word (e.g. "bug") and list clear reproduction steps.
     Respond ONLY in this exact JSON format, nothing else:
-    {{"classification": "...", "reproduction_steps": ["step1", "step2", "step3"]}}
+    {{"classification": "...", "reproduction_steps": ["step1", "step2", "step3"], "expected_result": "..."}}
     """
     
     response = client.chat.completions.create(
-        model="nvidia/nemotron-3.5-lightning-30b",
+        model="nvidia/nemotron-3.5-lightning-30b-a3b",
         messages=[{"role": "user", "content": prompt}]
     )
     
@@ -31,5 +31,6 @@ def triage_agent(input: TriageInput) -> ReproductionInput:
     
     return ReproductionInput(
         classification=parsed["classification"],
-        reproduction_steps=parsed["reproduction_steps"]
+        reproduction_steps=parsed["reproduction_steps"],
+        expected_result=parsed["expected_result"]
     )

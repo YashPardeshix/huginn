@@ -7,6 +7,7 @@ class TriageInput(BaseModel):
 class ReproductionInput(BaseModel):
     classification: str
     reproduction_steps: list[str]
+    expected_result: str
 
 class DiagnosisInput(BaseModel):
     expected_output: str
