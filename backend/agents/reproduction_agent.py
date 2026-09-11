@@ -40,7 +40,7 @@ def reproduction_agent(input: ReproductionInput) -> DiagnosisInput:
     """
     
     response = client.chat.completions.create(
-        model="deepseek-ai/deepseek-v4-flash-0731",
+        model="nvidia/nemotron-3-super-120b-a12b",
         messages=[{"role": "user", "content": prompt}]
     )
     
