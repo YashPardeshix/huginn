@@ -1,4 +1,3 @@
-# test_agent.py
 import os
 import docker
 from dotenv import load_dotenv
@@ -29,7 +28,9 @@ def test_agent(input: TestInput) -> ShadowEvalInput:
     passed = crashed_free and (input.expected_result in output)
     
     return ShadowEvalInput(
-        fix_passed=passed,
-        test_output=output,
-        expected_result=input.expected_result
-    )
+    fix_passed=passed,
+    test_output=output,
+    expected_result=input.expected_result,
+    human_fix="", 
+    ai_fix=input.proposed_fix
+)

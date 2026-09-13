@@ -48,7 +48,7 @@ def reproduction_agent(input: ReproductionInput) -> DiagnosisInput:
     actual_result = run_in_sandbox(generated_code)
     
     return DiagnosisInput(
-        expected_output=input.expected_result,
+        expected_result=input.expected_result,
         actual_output=actual_result,
         error_output=actual_result if actual_result.startswith("ERROR:") else ""
     )

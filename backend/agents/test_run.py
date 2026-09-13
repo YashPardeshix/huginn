@@ -4,6 +4,7 @@ from reproduction_agent import reproduction_agent
 from diagnosis_agent import diagnosis_agent
 from fix_agent import fix_agent
 from test_agent import test_agent
+from shadow_eval_agent import shadow_eval_agent
 
 bug = TriageInput(bug_description="""
 I have this function:
@@ -28,3 +29,7 @@ print("Agent 4 output:", step4)
 
 step5 = test_agent(step4)
 print("Agent 5 output:", step5)
+
+step5.human_fix = "def add(a, b):\n    return a + b\n\nprint(add(-5, -3))"
+step6 = shadow_eval_agent(step5)
+print("Agent 6 output:", step6)
