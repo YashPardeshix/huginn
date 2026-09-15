@@ -1,4 +1,5 @@
 from graph_nodes import build_graph
+from tracking import log_run
 
 app = build_graph()
 
@@ -19,3 +20,4 @@ print("Pipeline paused. Current state:", result)
 
 resume_result = app.invoke(None, config)
 print("Resumed. Final state:", resume_result)
+log_run(resume_result)
