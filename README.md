@@ -123,7 +123,5 @@ Requires Docker Desktop running locally, and an `NVIDIA_API_KEY` set in `backend
 
 Python · LangGraph · Docker SDK · SQLite (checkpointing) · FastAPI · MLflow · React · Tailwind · NVIDIA NIM (Nemotron models)
 
-## Demo
 
-A walkthrough video showing the complete flow — a real issue in, live triage through diagnosis, a proposed fix, human approval, and the shadow-mode comparison against a real human fix — is linked here: **[Loom link]**
 

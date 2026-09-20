@@ -82,10 +82,22 @@ function ProgressTracker({ status }) {
   );
 }
 
-function HumanFixForm({ runId, onSubmitted }) {
-  const [fixText, setFixText] = useState("");
+function HumanFixForm({ runId, currentFix, lastResult, onSubmitted }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [fixText, setFixText] = useState(currentFix || "");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
+
+  function handleOpen() {
+    setFixText(currentFix || "");
+    setFormError(null);
+    setIsOpen(true);
+  }
+
+  function handleClose() {
+    setIsOpen(false);
+    setFormError(null);
+  }
 
   async function handleSubmit() {
     if (!fixText.trim()) return;
@@ -101,14 +113,37 @@ function HumanFixForm({ runId, onSubmitted }) {
     }
   }
 
+  if (!isOpen) {
+    return (
+      <div className="mt-4">
+        <button
+          onClick={handleOpen}
+          className="border border-outline text-on-surface font-mono text-xs tracking-widest px-6 py-3 font-bold hover:border-on-surface"
+        >
+          {currentFix ? "EDIT HUMAN FIX & RE-EVALUATE" : "SUBMIT HUMAN FIX"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="border border-outline bg-surface-low p-6 mt-4">
-      <div className="font-mono text-xs tracking-widest text-primary mb-3">
-        SUBMIT HUMAN FIX
+      <div className="flex justify-between items-start mb-3">
+        <div className="font-mono text-xs tracking-widest text-primary">
+          {currentFix ? "EDIT HUMAN FIX & RE-EVALUATE" : "SUBMIT HUMAN FIX"}
+        </div>
+        <button
+          onClick={handleClose}
+          className="font-mono text-xs text-on-surface-dim hover:text-primary px-2"
+          title="Close"
+        >
+          ✕
+        </button>
       </div>
       <p className="font-body text-sm text-on-surface-muted mb-4 max-w-2xl">
-        Paste the real, independently-written fix a human used to resolve
-        this same issue. This will re-run Shadow Mode Evaluation against it.
+        {currentFix
+          ? "Revise the human fix below and re-run Shadow Mode Evaluation against the updated version."
+          : "Paste the real, independently-written fix a human used to resolve this same issue. This will re-run Shadow Mode Evaluation against it."}
       </p>
       <textarea
         value={fixText}
@@ -120,12 +155,17 @@ function HumanFixForm({ runId, onSubmitted }) {
       {formError && (
         <div className="font-mono text-xs text-primary mt-2">{formError}</div>
       )}
+      {lastResult && (
+        <div className="font-mono text-xs text-trustworthy mt-3">
+          Last re-evaluation: {lastResult.verdict?.toUpperCase()} — score {lastResult.similarity_score?.toFixed(2)}
+        </div>
+      )}
       <button
         onClick={handleSubmit}
         disabled={submitting || !fixText.trim()}
         className="bg-primary text-background font-mono text-xs tracking-widest px-6 py-3 font-bold disabled:opacity-50 mt-4"
       >
-        {submitting ? "EVALUATING..." : "SUBMIT & RE-EVALUATE"}
+        {submitting ? "EVALUATING..." : "RE-EVALUATE"}
       </button>
     </div>
   );
@@ -158,7 +198,7 @@ export default function FixComparison() {
     setRun(null);
 
     let attempts = 0;
-    const MAX_ATTEMPTS = 300; // 300 * 2s = 10 minutes before giving up
+    const MAX_ATTEMPTS = 300; 
 
     function poll() {
       attempts++;
@@ -265,18 +305,29 @@ export default function FixComparison() {
         </p>
       </div>
 
-      {run.verdict === "no_human_baseline_yet" && (
-        <HumanFixForm runId={runId} onSubmitted={reloadRun} />
-      )}
+      <HumanFixForm
+        runId={runId}
+        currentFix={run.human_fix}
+        lastResult={{ verdict: run.verdict, similarity_score: run.similarity_score }}
+        onSubmitted={reloadRun}
+      />
 
       {run.pending_approval && (
-        <div className="mt-10">
+        <div className="mt-10 border-t border-outline pt-8">
+          <div className="font-mono text-xs tracking-widest text-on-surface-muted mb-3">
+            FINAL DECISION
+          </div>
+          <p className="font-body text-sm text-on-surface-muted mb-4 max-w-2xl">
+            Marks this evaluation as reviewed. Once GitHub posting is wired
+            up, this will comment the result on the real issue — and close
+            it automatically if the verdict is trustworthy.
+          </p>
           <button
             onClick={handleApprove}
             disabled={approving}
             className="bg-primary text-background font-mono text-xs tracking-widest px-6 py-3 font-bold disabled:opacity-50"
           >
-            {approving ? "APPROVING..." : "EXECUTE HUMAN APPROVAL"}
+            {approving ? "APPROVING..." : "APPROVE & CLOSE OUT"}
           </button>
         </div>
       )}

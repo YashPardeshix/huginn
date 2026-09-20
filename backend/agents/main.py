@@ -1,7 +1,6 @@
-import os
 import sqlite3
 import uuid
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import mlflow
@@ -43,7 +42,6 @@ def run_pipeline_background(thread_id: str, bug_description: str):
         for step in graph_app.stream(initial_state, config):
             node_name = list(step.keys())[0]
             run_status[thread_id] = {"current_node": node_name, "done": False, "error": None}
-
         run_status[thread_id] = {"current_node": "awaiting_approval", "done": True, "error": None}
 
         final_state = graph_app.get_state(config).values
@@ -63,7 +61,6 @@ def list_runs():
         experiment_ids=[experiment.experiment_id],
         order_by=["start_time DESC"],
     )
-
     seen = set()
     result = []
     for run in runs:
@@ -139,6 +136,8 @@ def get_run_status(run_id: str):
     if run_id in run_status:
         return run_status[run_id]
 
+    # Not in memory (likely a uvicorn --reload restart wiped it) —
+    # fall back to the persisted LangGraph checkpoint, which survives restarts.
     config = {"configurable": {"thread_id": run_id}}
     try:
         state_snapshot = graph_app.get_state(config)
@@ -147,7 +146,6 @@ def get_run_status(run_id: str):
 
     if not state_snapshot or not state_snapshot.values:
         raise HTTPException(status_code=404, detail="Run not found")
-
     is_fully_finished = len(state_snapshot.next) == 0
     return {
         "current_node": "completed" if is_fully_finished else "awaiting_approval",
@@ -189,79 +187,10 @@ def metrics_trend():
     ]
 
 
-@app.post("/runs/from-url")
-def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
-    try:
-        owner, repo, issue_number = parse_github_url(request.github_issue_url)
-        bug_description = fetch_github_issue(owner, repo, issue_number)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    thread_id = str(uuid.uuid4())
-    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
-    background_tasks.add_task(run_pipeline_background, thread_id, bug_description)
-
-    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
-
-
-@app.post("/runs/{run_id}/approve")
-def approve_run(run_id: str):
-    config = {"configurable": {"thread_id": run_id}}
-    result = graph_app.invoke(None, config)
-    log_run(run_id, result)
-
-    return {
-        "run_id": run_id,
-        "thread_id": run_id,
-        "status": "completed",
-        "state": result
-    }
-
-
-@app.post("/runs/{run_id}/human-fix")
-def submit_human_fix(run_id: str, request: HumanFixRequest):
-    """
-    Accepts a real human fix for an already-completed run and re-runs
-    just the Shadow Mode Evaluation agent against it, then re-logs the run
-    so the dashboard shows the updated, genuine comparison.
-    """
-    config = {"configurable": {"thread_id": run_id}}
-    try:
-        state = graph_app.get_state(config).values
-    except Exception:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    if not state:
-        raise HTTPException(status_code=404, detail="Run not found")
-
-    shadow_input = ShadowEvalInput(
-        fix_passed=state.get("fix_passed", False),
-        test_output=state.get("test_output", ""),
-        expected_result=state.get("expected_result", ""),
-        human_fix=request.human_fix,
-        ai_fix=state.get("ai_fix", ""),
-    )
-    result = shadow_eval_agent(shadow_input)
-
-    updated_state = {
-        **state,
-        "human_fix": request.human_fix,
-        "similarity_score": result.similarity_score,
-        "reasoning": result.reasoning,
-        "verdict": result.verdict,
-    }
-
-    log_run(run_id, updated_state)
-
-    return {
-        "run_id": run_id,
-        "similarity_score": result.similarity_score,
-        "reasoning": result.reasoning,
-        "verdict": result.verdict,
-    }
-
 import hmac
 import hashlib
+import os
+from fastapi import Request
 
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
 
@@ -307,3 +236,92 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_pipeline_background, thread_id, bug_description)
 
     return {"status": "accepted", "thread_id": thread_id}
+def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
+    try:
+        owner, repo, issue_number = parse_github_url(request.github_issue_url)
+        bug_description = fetch_github_issue(owner, repo, issue_number)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    thread_id = str(uuid.uuid4())
+    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
+    background_tasks.add_task(run_pipeline_background, thread_id, bug_description)
+
+    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
+
+
+@app.post("/runs/{run_id}/approve")
+def approve_run(run_id: str):
+    client = mlflow.tracking.MlflowClient()
+    experiment = client.get_experiment_by_name("Default")
+    preserved = {}
+    if experiment is not None:
+        existing_runs = client.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            filter_string=f"tags.thread_id = '{run_id}'",
+            order_by=["start_time DESC"],
+        )
+        if existing_runs:
+            latest = existing_runs[0]
+            preserved = {
+                "similarity_score": latest.data.metrics.get("similarity_score", 0.0),
+                "verdict": latest.data.params.get("verdict", "unknown"),
+                "reasoning": latest.data.params.get("reasoning", ""),
+                "human_fix": latest.data.params.get("human_fix", ""),
+            }
+
+    config = {"configurable": {"thread_id": run_id}}
+    result = graph_app.invoke(None, config)
+
+    merged_state = {**result, **preserved}
+    log_run(run_id, merged_state)
+
+    return {
+        "run_id": run_id,
+        "thread_id": run_id,
+        "status": "completed",
+        "state": merged_state
+    }
+
+
+@app.post("/runs/{run_id}/human-fix")
+def submit_human_fix(run_id: str, request: HumanFixRequest):
+    """
+    Accepts a real human fix for an already-completed run and re-runs
+    just the Shadow Mode Evaluation agent against it, then re-logs the run
+    so the dashboard shows the updated, genuine comparison.
+    """
+    config = {"configurable": {"thread_id": run_id}}
+    try:
+        state = graph_app.get_state(config).values
+    except Exception:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if not state:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    shadow_input = ShadowEvalInput(
+        fix_passed=state.get("fix_passed", False),
+        test_output=state.get("test_output", ""),
+        expected_result=state.get("expected_result", ""),
+        human_fix=request.human_fix,
+        ai_fix=state.get("ai_fix", ""),
+    )
+    result = shadow_eval_agent(shadow_input)
+
+    updated_state = {
+        **state,
+        "human_fix": request.human_fix,
+        "similarity_score": result.similarity_score,
+        "reasoning": result.reasoning,
+        "verdict": result.verdict,
+    }
+
+    log_run(run_id, updated_state)
+
+    return {
+        "run_id": run_id,
+        "similarity_score": result.similarity_score,
+        "reasoning": result.reasoning,
+        "verdict": result.verdict,
+    }
