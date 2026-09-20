@@ -13,26 +13,35 @@ client = OpenAI(
 )
 
 def shadow_eval_agent(input: ShadowEvalInput) -> EvaluationResult:
-    prompt = f"""
-    Fix passed: {input.fix_passed}
-    Test output: {input.test_output}
-    Expected result: {input.expected_result}
-    Human fix: {input.human_fix}
-    AI fix: {input.ai_fix}
+    if not input.human_fix.strip():
+        prompt = f"""
+        No human fix exists yet for this issue.
 
-    Evaluate how similar the AI's fix is to the human's fix.
-    Give a similarity score between 0 and 1 (e.g. 0.85), a short reasoning, and a verdict of either "trustworthy" or "needs_human_rework".
+        Respond ONLY in this exact JSON format, nothing else:
+        {{"similarity_score": 0.0, "reasoning": "No human resolution exists yet for this issue — nothing to compare against.", "verdict": "no_human_baseline_yet"}}
+        """
+    else:
+        prompt = f"""
+        Fix passed: {input.fix_passed}
+        Test output: {input.test_output}
+        Expected result: {input.expected_result}
+        Human fix: {input.human_fix}
+        AI fix: {input.ai_fix}
 
-    Respond ONLY in this exact JSON format, nothing else:
-    {{"similarity_score": <float>, "reasoning": "<short explanation>", "verdict": "<trustworthy or needs_human_rework>"}}
-    """ 
+        Evaluate how similar the AI's fix is to the human's fix.
+        Give a similarity score between 0 and 1 (e.g. 0.85), a short reasoning, and a verdict of either "trustworthy" or "needs_human_rework".
+
+        Respond ONLY in this exact JSON format, nothing else:
+        {{"similarity_score": <float>, "reasoning": "<short explanation>", "verdict": "<trustworthy or needs_human_rework>"}}
+        """
+
     response = client.chat.completions.create(
         model="nvidia/nemotron-3-super-120b-a12b",
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     parsed = json.loads(response.choices[0].message.content)
-    
+
     return EvaluationResult(
         similarity_score=parsed["similarity_score"],
         reasoning=parsed["reasoning"],
