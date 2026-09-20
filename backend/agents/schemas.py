@@ -12,11 +12,13 @@ class DiagnosisInput(BaseModel):
     expected_result: str
     actual_output: str
     error_output: str = ""
+    original_code: str
 
 class FixInput(BaseModel):
     root_cause: str
     evidence:str
     expected_result: str
+    original_code: str
 
 class TestInput(BaseModel):
     proposed_fix: str

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import mlflow
 
-from github_client import parse_github_url, fetch_github_issue
+from github_client import parse_github_url, fetch_github_issue, post_issue_comment, close_issue
 from graph_nodes import build_graph
 from tracking import log_run
 from shadow_eval_agent import shadow_eval_agent
@@ -35,13 +35,13 @@ class HumanFixRequest(BaseModel):
     human_fix: str
 
 
-def run_pipeline_background(thread_id: str, bug_description: str):
+def run_pipeline_background(thread_id: str, initial_state: dict):
     config = {"configurable": {"thread_id": thread_id}}
-    initial_state = {"bug_description": bug_description, "human_fix": ""}
     try:
         for step in graph_app.stream(initial_state, config):
             node_name = list(step.keys())[0]
             run_status[thread_id] = {"current_node": node_name, "done": False, "error": None}
+
         run_status[thread_id] = {"current_node": "awaiting_approval", "done": True, "error": None}
 
         final_state = graph_app.get_state(config).values
@@ -135,9 +135,6 @@ def delete_run(run_id: str):
 def get_run_status(run_id: str):
     if run_id in run_status:
         return run_status[run_id]
-
-    # Not in memory (likely a uvicorn --reload restart wiped it) —
-    # fall back to the persisted LangGraph checkpoint, which survives restarts.
     config = {"configurable": {"thread_id": run_id}}
     try:
         state_snapshot = graph_app.get_state(config)
@@ -165,7 +162,6 @@ def metrics_trend():
         experiment_ids=[experiment.experiment_id],
         order_by=["start_time DESC"],
     )
-
     seen = set()
     deduped = []
     for run in runs:
@@ -174,7 +170,6 @@ def metrics_trend():
             continue
         seen.add(thread_id)
         deduped.append(run)
-
     deduped.reverse()
 
     return [
@@ -231,9 +226,22 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     body = issue.get("body", "") or ""
     bug_description = f"Title: {title}\n\n{body}"
 
+    repository = payload.get("repository", {})
+    owner = repository.get("owner", {}).get("login", "")
+    repo = repository.get("name", "")
+    issue_number = str(issue.get("number", ""))
+
     thread_id = str(uuid.uuid4())
     run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
-    background_tasks.add_task(run_pipeline_background, thread_id, bug_description)
+
+    initial_state = {
+        "bug_description": bug_description,
+        "human_fix": "",
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_issue_number": issue_number,
+    }
+    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
 
     return {"status": "accepted", "thread_id": thread_id}
 def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
@@ -245,7 +253,15 @@ def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
 
     thread_id = str(uuid.uuid4())
     run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
-    background_tasks.add_task(run_pipeline_background, thread_id, bug_description)
+
+    initial_state = {
+        "bug_description": bug_description,
+        "human_fix": "",
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_issue_number": issue_number,
+    }
+    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
 
     return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
 
@@ -276,10 +292,40 @@ def approve_run(run_id: str):
     merged_state = {**result, **preserved}
     log_run(run_id, merged_state)
 
+    github_status = "not_attempted"
+    owner = merged_state.get("github_owner")
+    repo = merged_state.get("github_repo")
+    issue_number = merged_state.get("github_issue_number")
+
+    if owner and repo and issue_number:
+        verdict = merged_state.get("verdict", "unknown")
+        score = merged_state.get("similarity_score", 0.0)
+        ai_fix = merged_state.get("ai_fix", "")
+        reasoning = merged_state.get("reasoning", "")
+
+        comment_body = (
+            f"**Huginn Shadow-Mode Evaluation**\n\n"
+            f"**Verdict:** `{verdict}`\n"
+            f"**Similarity to human fix:** `{score:.2f}`\n\n"
+            f"**Proposed fix:**\n```python\n{ai_fix}\n```\n\n"
+            f"**Reasoning:** {reasoning}\n\n"
+            f"_This comment was posted automatically after human approval in Huginn._"
+        )
+
+        try:
+            post_issue_comment(owner, repo, issue_number, comment_body)
+            github_status = "commented"
+            if verdict == "trustworthy":
+                close_issue(owner, repo, issue_number)
+                github_status = "commented_and_closed"
+        except ValueError as e:
+            github_status = f"failed: {e}"
+
     return {
         "run_id": run_id,
         "thread_id": run_id,
         "status": "completed",
+        "github_status": github_status,
         "state": merged_state
     }
 
@@ -325,3 +371,25 @@ def submit_human_fix(run_id: str, request: HumanFixRequest):
         "reasoning": result.reasoning,
         "verdict": result.verdict,
     }
+
+@app.post("/runs/from-url")
+def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
+    try:
+        owner, repo, issue_number = parse_github_url(request.github_issue_url)
+        bug_description = fetch_github_issue(owner, repo, issue_number)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    thread_id = str(uuid.uuid4())
+    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
+
+    initial_state = {
+        "bug_description": bug_description,
+        "human_fix": "",
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_issue_number": issue_number,
+    }
+    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
+
+    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}

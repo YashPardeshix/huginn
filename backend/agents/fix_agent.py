@@ -18,8 +18,14 @@ def fix_agent(input: FixInput) -> TestInput:
     Evidence: {input.evidence}
     Expected result: {input.expected_result}
 
-    Write the complete, corrected, runnable Python code that fixes this bug.
-    Include the full function definition and a line that calls it with the same inputs, printing the result.
+    Here is the ORIGINAL code that reproduces the bug — fix THIS exact code,
+    keeping the same function name and signature. Do not invent a different
+    function or change what the function is called:
+
+    {input.original_code}
+
+    Write the complete, corrected, runnable Python code that fixes this bug,
+    using the SAME function name as above.
 
     Respond ONLY in this exact JSON format, nothing else:
     {{"proposed_fix": "<raw runnable python code as a single string, no markdown>", "explanation": "..."}}

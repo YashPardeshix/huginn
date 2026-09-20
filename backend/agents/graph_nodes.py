@@ -29,14 +29,16 @@ def reproduction_node(state: PipelineState) -> dict:
     ))
     return {
         "actual_output": result.actual_output,
-        "error_output": result.error_output
+        "error_output": result.error_output,
+        "original_code": result.original_code
     }
 
 def diagnosis_node(state: PipelineState) -> dict:
     result = diagnosis_agent(DiagnosisInput(
         expected_result=state["expected_result"],
         actual_output=state["actual_output"],
-        error_output=state["error_output"]
+        error_output=state["error_output"],
+        original_code=state["original_code"]
     ))
     return {
         "root_cause": result.root_cause,
@@ -47,7 +49,8 @@ def fix_node(state: PipelineState) -> dict:
     result = fix_agent(FixInput(
         root_cause=state["root_cause"],
         evidence=state["evidence"],
-        expected_result=state["expected_result"]
+        expected_result=state["expected_result"],
+        original_code=state["original_code"]
     ))
     return {
         "proposed_fix": result.proposed_fix,

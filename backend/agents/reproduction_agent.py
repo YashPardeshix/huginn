@@ -50,6 +50,7 @@ def reproduction_agent(input: ReproductionInput) -> DiagnosisInput:
     return DiagnosisInput(
         expected_result=input.expected_result,
         actual_output=actual_result,
-        error_output=actual_result if actual_result.startswith("ERROR:") else ""
+        error_output=actual_result if actual_result.startswith("ERROR:") else "",
+        original_code=generated_code
     )
 

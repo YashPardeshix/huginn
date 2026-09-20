@@ -35,5 +35,6 @@ def diagnosis_agent(input: DiagnosisInput) -> FixInput:
     return FixInput(
         root_cause=parsed["root_cause"],
         evidence=parsed["evidence"],
-        expected_result=input.expected_result
+        expected_result=input.expected_result,
+        original_code=input.original_code
     )

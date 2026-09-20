@@ -1,6 +1,6 @@
 from typing import TypedDict
 
-class PipelineState(TypedDict):
+class PipelineState(TypedDict, total=False):
     bug_description: str
     classification: str
     reproduction_steps: list[str]
@@ -18,3 +18,7 @@ class PipelineState(TypedDict):
     similarity_score: float
     reasoning: str
     verdict: str
+    github_owner: str
+    github_repo: str
+    github_issue_number: str
+    original_code: str
