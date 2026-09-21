@@ -15,18 +15,28 @@ client = OpenAI(
 
 def run_in_sandbox(code: str) -> str:
     docker_client = docker.from_env()
+    container = docker_client.containers.create(
+        image="python:3.11-slim",
+        command=["python", "-c", code],
+        mem_limit="256m",
+        network_disabled=True,
+    )
+    container.start()
     
     try:
-        output = docker_client.containers.run(
-            image="python:3.11-slim",
-            command=["python", "-c", code],
-            mem_limit="256m",
-            network_disabled=True,
-            remove=True
-        )
-        return output.decode("utf-8")
-    except docker.errors.ContainerError as e:
-        return f"ERROR: {e}"
+        result = container.wait(timeout=30)
+        output = container.logs().decode("utf-8")
+        if result.get("StatusCode") != 0:
+            return f"ERROR: {output}"
+        return output
+    except Exception:
+        try:
+            container.kill()
+        except Exception:
+            pass
+        return "ERROR: Execution timed out (limit: 30s)"
+    finally:
+        container.remove(force=True)
 
 def reproduction_agent(input: ReproductionInput) -> DiagnosisInput:
     steps_text = "\n".join(input.reproduction_steps)
