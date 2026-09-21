@@ -30,6 +30,12 @@ export async function fetchRepositories() {
   return res.json();
 }
 
+export async function fetchAuditLog() {
+  const res = await fetch(`${API_BASE}/audit`);
+  if (!res.ok) throw new Error("Failed to fetch audit log");
+  return res.json();
+}
+
 export async function submitIssueUrl(url) {
   const res = await fetch(`${API_BASE}/runs/from-url`, {
     method: "POST",

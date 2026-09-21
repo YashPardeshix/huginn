@@ -8,6 +8,7 @@ import mlflow
 from github_client import parse_github_url, fetch_github_issue, post_issue_comment, close_issue
 from graph_nodes import build_graph
 from tracking import log_run
+from audit import log_audit_event, get_audit_log
 from shadow_eval_agent import shadow_eval_agent
 from schemas import ShadowEvalInput
 
@@ -48,6 +49,7 @@ def run_pipeline_background(thread_id: str, initial_state: dict):
         log_run(thread_id, final_state)
     except Exception as e:
         run_status[thread_id] = {"current_node": "error", "done": True, "error": str(e)}
+        log_audit_event(thread_id, "pipeline_error", detail=str(e))
 
 
 @app.get("/runs")
@@ -272,26 +274,6 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
 
     return {"status": "accepted", "thread_id": thread_id}
-def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
-    try:
-        owner, repo, issue_number = parse_github_url(request.github_issue_url)
-        bug_description = fetch_github_issue(owner, repo, issue_number)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    thread_id = str(uuid.uuid4())
-    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
-
-    initial_state = {
-        "bug_description": bug_description,
-        "human_fix": "",
-        "github_owner": owner,
-        "github_repo": repo,
-        "github_issue_number": issue_number,
-    }
-    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
-
-    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
 
 
 @app.post("/runs/{run_id}/approve")
@@ -348,6 +330,14 @@ def approve_run(run_id: str):
                 github_status = "commented_and_closed"
         except ValueError as e:
             github_status = f"failed: {e}"
+
+    log_audit_event(
+        run_id,
+        "approval",
+        verdict=merged_state.get("verdict", "unknown"),
+        similarity_score=merged_state.get("similarity_score", 0.0),
+        github_status=github_status,
+    )
 
     return {
         "run_id": run_id,
@@ -440,3 +430,8 @@ def list_repositories():
             repos[key]["trustworthy_count"] += 1
 
     return list(repos.values())
+
+
+@app.get("/audit")
+def audit_log():
+    return get_audit_log()
