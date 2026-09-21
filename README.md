@@ -15,16 +15,16 @@ This is the same pattern real engineering organizations use before giving an AI 
 ```mermaid
 graph TD
     A[GitHub Webhook / Manual URL Paste] --> B[Triage Agent]
-    B -->|classification, reproduction_steps, expected_result| C[Reproduction Agent]
-    C -->|runs in Docker sandbox: no network, 256MB limit, 30s timeout| D[Diagnosis Agent]
-    D -->|root_cause, evidence, original_code| E[Fix Agent]
-    E -->|proposed_fix, explanation, expected_result| F[Test Agent]
-    F -->|runs fix in fresh Docker sandbox, checks vs test suite| G[Shadow Mode Evaluation Agent]
-    G -->|similarity_score, reasoning, verdict| H[HITL Gate: LangGraph interrupt]
-    H -->|state saved to SQLite| I[Human Approval via FastAPI + Dashboard]
-    I -->|posts comment and closes issue on trustworthy| J[GitHub API Write-back]
-    I --> K[MLflow: metrics logged across every run]
-    K --> L[React Dashboard: comparisons, trends, approval queue, audit]
+    B -->|structured bug data| C[Reproduction Agent]
+    C -->|sandboxed reproduction| D[Diagnosis Agent]
+    D -->|root cause + evidence| E[Fix Agent]
+    E -->|proposed fix| F[Test Agent]
+    F -->|verified fix| G[Shadow Mode Evaluation]
+    G -->|verdict + score| H[HITL Gate]
+    H -->|checkpoint saved| I[Human Approval]
+    I -->|comment + close| J[GitHub Write-back]
+    I --> K[MLflow Logging]
+    K --> L[React Dashboard]
 ```
 
 ### The six agents
