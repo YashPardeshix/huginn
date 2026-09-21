@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 from schemas import TriageInput, ReproductionInput
@@ -11,6 +12,13 @@ client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
     api_key=api_key
 )
+
+def parse_json_safely(raw_text: str) -> dict:
+    raw_text = raw_text.strip()
+    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+    if not match:
+        raise ValueError(f"No JSON found in model output: {raw_text}")
+    return json.loads(match.group(0))
 
 def triage_agent(input: TriageInput) -> ReproductionInput:
     prompt = f"""
@@ -27,7 +35,7 @@ def triage_agent(input: TriageInput) -> ReproductionInput:
     )
     
     raw_text = response.choices[0].message.content
-    parsed = json.loads(raw_text)
+    parsed = parse_json_safely(raw_text)
     
     return ReproductionInput(
         classification=parsed["classification"],

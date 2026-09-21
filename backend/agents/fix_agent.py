@@ -1,16 +1,25 @@
 import os
 import json
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 from schemas import FixInput, TestInput
- 
+
 load_dotenv()
 api_key = os.getenv("NVIDIA_API_KEY")
 
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key=api_key
+    api_key=api_key,
+    timeout=60.0,
 )
+
+def parse_json_safely(raw_text: str) -> dict:
+    raw_text = raw_text.strip()
+    match = re.search(r"\{.*\}", raw_text, re.DOTALL)
+    if not match:
+        raise ValueError(f"No JSON found in model output: {raw_text}")
+    return json.loads(match.group(0))
 
 def fix_agent(input: FixInput) -> TestInput:
     prompt = f"""
@@ -19,13 +28,15 @@ def fix_agent(input: FixInput) -> TestInput:
     Expected result: {input.expected_result}
 
     Here is the ORIGINAL code that reproduces the bug — fix THIS exact code,
-    keeping the same function name and signature. Do not invent a different
-    function or change what the function is called:
+    keeping the same function name and signature:
 
     {input.original_code}
 
-    Write the complete, corrected, runnable Python code that fixes this bug,
-    using the SAME function name as above.
+    Rules for your proposed fix:
+    1. Write idiomatic, clean, complete Python code.
+    2. Keep the original function name and parameters.
+    3. At the bottom, include an `if __name__ == "__main__":` block that calls the function and explicitly PRINTS the returned result: `print(result)`.
+    4. Do NOT wrap the call in unnecessary try/except blocks.
 
     Respond ONLY in this exact JSON format, nothing else:
     {{"proposed_fix": "<raw runnable python code as a single string, no markdown>", "explanation": "..."}}
@@ -36,10 +47,11 @@ def fix_agent(input: FixInput) -> TestInput:
         messages=[{"role": "user", "content": prompt}]
     )
     
-    parsed = json.loads(response.choices[0].message.content)
+    parsed = parse_json_safely(response.choices[0].message.content)
+    fix_code = parsed["proposed_fix"].replace("\\n", "\n")
     
     return TestInput(
-        proposed_fix=parsed["proposed_fix"],
+        proposed_fix=fix_code,
         explanation=parsed["explanation"],
         expected_result=input.expected_result
     )

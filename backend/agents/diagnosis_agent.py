@@ -9,7 +9,8 @@ api_key = os.getenv("NVIDIA_API_KEY")
 
 client = OpenAI(
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key=api_key
+    api_key=api_key,
+    timeout=60.0
 )
 
 def diagnosis_agent(input: DiagnosisInput) -> FixInput:

@@ -48,6 +48,8 @@ def run_pipeline_background(thread_id: str, initial_state: dict):
         final_state = graph_app.get_state(config).values
         log_run(thread_id, final_state)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         run_status[thread_id] = {"current_node": "error", "done": True, "error": str(e)}
         log_audit_event(thread_id, "pipeline_error", detail=str(e))
 

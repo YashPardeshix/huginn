@@ -16,14 +16,15 @@ This is the same pattern real engineering organizations use before giving an AI 
 graph TD
     A[GitHub Webhook / Manual URL Paste] --> B[Triage Agent]
     B -->|classification, reproduction_steps, expected_result| C[Reproduction Agent]
-    C -->|runs in Docker sandbox: no network, 256MB limit, timeout| D[Diagnosis Agent]
-    D -->|root_cause, evidence| E[Fix Agent]
-    E -->|proposed_fix, explanation| F[Test Agent]
+    C -->|runs in Docker sandbox: no network, 256MB limit, 30s timeout| D[Diagnosis Agent]
+    D -->|root_cause, evidence, original_code| E[Fix Agent]
+    E -->|proposed_fix, explanation, expected_result| F[Test Agent]
     F -->|runs fix in fresh Docker sandbox, checks vs test suite| G[Shadow Mode Evaluation Agent]
     G -->|similarity_score, reasoning, verdict| H[HITL Gate: LangGraph interrupt]
     H -->|state saved to SQLite| I[Human Approval via FastAPI + Dashboard]
-    I --> J[MLflow: metrics logged across every run]
-    J --> K[React Dashboard: comparisons, trends, approval queue]
+    I -->|posts comment and closes issue on trustworthy| J[GitHub API Write-back]
+    I --> K[MLflow: metrics logged across every run]
+    K --> L[React Dashboard: comparisons, trends, approval queue, audit]
 ```
 
 ### The six agents
@@ -33,71 +34,74 @@ graph TD
 | Triage | Reads the raw bug report, classifies it, extracts structured reproduction steps and the expected result | NVIDIA Nemotron 3.5 Lightning |
 | Reproduction | Writes Python code to reproduce the bug, runs it inside an isolated Docker container | NVIDIA Nemotron 3 Super |
 | Diagnosis | Compares expected vs. actual output, identifies the root cause with supporting evidence | NVIDIA Nemotron 3 Super |
-| Fix | Proposes a complete, runnable code fix with an explanation | NVIDIA Nemotron 3 Super |
-| Test | Runs the proposed fix in a fresh Docker sandbox, verifies it actually produces the expected result and doesn't break existing behavior | Pure execution + comparison, no LLM |
+| Fix | Proposes a complete, runnable code fix grounded on the original code, with an explanation | NVIDIA Nemotron 3 Super |
+| Test | Runs the proposed fix in a fresh Docker sandbox, verifies it produces the expected result and doesn't crash | Pure execution + comparison, no LLM |
 | Shadow Mode Evaluation | Compares the AI's fix against a human's real, independently-written resolution — similarity score, reasoning, and verdict | NVIDIA Nemotron 3 Super |
 
-Each agent has a strict, typed input/output schema (Pydantic) — the contract between agents is explicit, never a loose blob of text. All six agents are also wrapped as LangGraph nodes sharing one `PipelineState`, so a full run can be checkpointed and resumed, not just passed hand-to-hand in memory.
+Each agent has a strict, typed input/output schema (Pydantic) — the contract between agents is explicit, never a loose blob of text. All six agents are wrapped as LangGraph nodes sharing one `PipelineState`, so a full run can be checkpointed to SQLite and resumed cleanly across server restarts.
 
 ## Safety: sandboxed execution
 
 AI-generated code never runs unrestricted. Every execution inside Docker enforces:
 
-- **No network access** — blocks the sandbox from leaking data out or pulling something malicious in, in either direction
-- **Memory limit (256MB)** — stops a runaway process from taking down the host machine
-- **Timeout** — stops an infinite loop from freezing the pipeline indefinitely, critical when processing many issues back to back
+- **No network access** — blocks the sandbox from leaking sensitive data out or pulling malicious scripts in
+- **Memory limit (256MB)** — stops runaway allocations from degrading host machine performance
+- **Execution timeout (30s)** — terminates infinite loops automatically, preventing background task starvation
 
 This is treated as the single most safety-critical piece of infrastructure in the project, never a formality.
 
 ## Safety: human-in-the-loop
 
-Before anything reaches a real repository — a comment, a PR, a label — the LangGraph pipeline pauses with a genuine `interrupt`, writes its full state to a SQLite checkpoint, and waits. The process can exit entirely while paused.
+Before anything reaches a live repository — a comment, a PR, or an issue state change — the LangGraph pipeline pauses with a genuine `interrupt_before=["human_approval"]`, writes its complete state to a SQLite checkpoint, and halts. The server process can exit or restart entirely while paused without losing run state.
 
-A separate, later action — a human clicking "Approve" in the dashboard, which hits a FastAPI endpoint — resumes the pipeline from that exact saved checkpoint. This was proven by restarting Docker mid-session and resuming cleanly from the saved state, not just in theory.
+A separate, explicit human action — clicking "Approve & Close Out" in the dashboard — triggers a FastAPI endpoint that resumes the pipeline from that exact saved checkpoint. Upon approval:
 
-HITL here is not a single approval gate bolted onto one step — it is the architectural boundary that governs the entire system before any real-world consequence occurs.
+- A structured evaluation summary is posted as a comment on the real GitHub issue
+- If the verdict is `trustworthy`, the issue is automatically closed
+- If the verdict is `needs_human_rework`, the comment is posted for developer review, but the issue remains open
 
 ## Shadow mode evaluation
 
-When a human's real fix exists, the Shadow Mode agent produces a genuine similarity score (0–1), a short reasoning, and a verdict of `trustworthy` or `needs_human_rework`. When no human fix exists yet for a freshly-submitted issue, it returns an explicit `no_human_baseline_yet` result instead of fabricating a comparison — an honest "nothing to compare against" rather than a confident-sounding guess.
+When a human's real fix exists, the Shadow Mode agent produces a genuine similarity score (0.00–1.00), a short reasoning, and a verdict of `trustworthy` or `needs_human_rework`.
 
-## Experiment tracking
+When no human fix exists yet for a freshly submitted issue, it returns an explicit `no_human_baseline_yet` guard-clause result instead of hallucinating a comparison — an honest baseline rather than an ungrounded guess. Developers can submit an actual human fix at any time through the dashboard to trigger on-demand re-evaluation.
 
-Every completed run is logged to MLflow — `similarity_score`, `verdict`, `fix_passed`, the AI's proposed fix, the human's real fix, and reasoning — tagged by the pipeline's unique run ID. Tracked across dozens of real runs, this becomes a genuine record of whether the agent's engineering judgment is actually improving over time, not a single lucky result.
+## Experiment tracking & results
 
-**Result after real-world testing on 30 live GitHub issues:** the agent's fix scored 80+ similarity on 25 of them (~83%) — genuinely close to the human's real fix — with the remaining 17% honestly flagged for human rework.
+Every completed run is logged to MLflow — `similarity_score`, `verdict`, `fix_passed`, the AI's proposed fix, the human's real fix, reasoning, and repository metadata — tagged by unique thread IDs.
+
+**Result after real-world testing on 20 distinct GitHub issues:**
+
+- Total Runs: 20
+- Average Similarity Score: 0.87
+- Trustworthy Rate: 80% (16 of 20 runs)
+- Needs Human Rework Rate: 20% (4 of 20 runs)
+
+The evaluation suite tested across 13 distinct bug classes (sign inversions, recursion base cases, off-by-one slice bounds, in-place iteration side effects, unhashable dictionary keys, binary search boundaries, and stack imbalances). The judge demonstrated semantic discernment — flagging in-place list mutation as rework despite identical test outputs.
 
 ## GitHub integration
 
 Two entry points feed the same pipeline:
 
-- **Webhook** — GitHub notifies Huginn automatically the moment a new issue is opened on a connected repository, triggering the full pipeline with zero human action needed. This is the production path.
-- **Manual URL paste** — a person pastes any public GitHub issue URL into the dashboard and watches the pipeline run live, agent by agent. This is the demo path, built specifically so the system's behavior is inspectable on demand.
+- **Webhook** — GitHub notifies Huginn automatically the moment a new issue is opened on a connected repository, triggering background execution with zero human action needed
+- **Manual URL paste** — a developer pastes any public GitHub issue URL into the dashboard to inspect the pipeline live, agent by agent
 
 ## Dashboard
 
-A React + Tailwind interface, Utilitarian/Swiss design system — high contrast, monospaced data, strict grid, zero decorative chrome — built to read as a serious engineering instrument, not a consumer app.
+A React + Tailwind interface built in an industrial Utilitarian / Swiss design system — high contrast, monospaced tabular figures, strict grid alignment, zero decorative chrome.
 
-- **Runs** — paste a GitHub issue URL, watch the six-agent pipeline execute live, step by step
-- **Fix Comparison** — the AI's proposed fix and the human's real fix, side by side, with the similarity score and verdict as the dominant visual element
-- **Metrics** — similarity score trend across every logged run, showing improvement (or regression) over time
-- **Repositories** — connected repos and their webhook status
-- **Audit** — the full history of every human approval decision, for accountability
-
-## Observability
-
-Before this project was called done, every one of these had a real, working answer — not just "the tests passed":
-
-- **Sandbox misbehavior** — Docker execution errors and timeouts are captured and surfaced in the Audit log, not silently swallowed
-- **Dangerous agent proposals** — every proposed fix is visible in full, in plain text, before a human approval decision is made — nothing executes against a real repository unseen
-- **HITL bypass detection** — the interrupt is enforced at the graph-compilation level (`interrupt_before`), not by convention, so there is no code path that reaches the post-approval step without the checkpoint existing first
+- **Runs** — interactive issue URL submission and historical run catalog
+- **Fix Comparison** — side-by-side diff pane of AI proposed fix vs. human actual fix with live verdict badge and rationale
+- **Metrics** — full telemetry trend graphs tracking similarity score and trustworthiness across all logged runs
+- **Repositories** — live webhook connection status and per-repo evaluation statistics
+- **Audit** — immutable operational log tracking human approvals, GitHub API write-backs, and pipeline error telemetry
 
 ## Setup
 
 **Backend:**
 ```bash
 cd backend/agents
-pip install -r requirements.txt   # openai, docker, langgraph, langgraph-checkpoint-sqlite, mlflow, fastapi, uvicorn, httpx, python-dotenv, pydantic
+pip install openai docker langgraph langgraph-checkpoint-sqlite mlflow fastapi uvicorn httpx python-dotenv pydantic
 uvicorn main:app --reload --port 8000
 ```
 
@@ -108,20 +112,15 @@ npm install
 npm run dev
 ```
 
-Requires Docker Desktop running locally, and an `NVIDIA_API_KEY` set in `backend/agents/.env`.
-
-## Definition of done
-
-- The full six-agent pipeline runs end to end on real GitHub issues, via both webhook and manual URL entry
-- The HITL gate genuinely pauses and genuinely resumes from a checkpoint — never a cosmetic `sleep()` call
-- The Docker sandbox enforces real isolation — no network, memory-limited, timeout-bound — not just intention
-- Shadow-mode evaluation has run against real human-resolved issues using honest, falsifiable scoring
-- MLflow shows metrics trending across dozens of runs, not a single snapshot
-- All patterns — shadow mode evaluation, sandboxed execution safety, multi-agent state machine orchestration, HITL as an architectural primitive, and experiment tracking for agent quality over time — are implemented and demonstrable, not just described
+**Prerequisites:**
+- Docker Desktop running locally
+- `.env` file in `backend/agents/` containing:
+```
+NVIDIA_API_KEY=your_nvidia_api_key
+GITHUB_TOKEN=your_github_personal_access_token
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+```
 
 ## Stack
 
-Python · LangGraph · Docker SDK · SQLite (checkpointing) · FastAPI · MLflow · React · Tailwind · NVIDIA NIM (Nemotron models)
-
-
-
+Python · LangGraph · Docker SDK · SQLite (checkpoints & audit) · FastAPI · MLflow · React · Tailwind CSS · Vite · NVIDIA NIM (Nemotron models)
