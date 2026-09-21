@@ -61,6 +61,7 @@ def list_runs():
         experiment_ids=[experiment.experiment_id],
         order_by=["start_time DESC"],
     )
+
     seen = set()
     result = []
     for run in runs:
@@ -135,6 +136,7 @@ def delete_run(run_id: str):
 def get_run_status(run_id: str):
     if run_id in run_status:
         return run_status[run_id]
+
     config = {"configurable": {"thread_id": run_id}}
     try:
         state_snapshot = graph_app.get_state(config)
@@ -143,6 +145,7 @@ def get_run_status(run_id: str):
 
     if not state_snapshot or not state_snapshot.values:
         raise HTTPException(status_code=404, detail="Run not found")
+
     is_fully_finished = len(state_snapshot.next) == 0
     return {
         "current_node": "completed" if is_fully_finished else "awaiting_approval",
@@ -162,6 +165,7 @@ def metrics_trend():
         experiment_ids=[experiment.experiment_id],
         order_by=["start_time DESC"],
     )
+
     seen = set()
     deduped = []
     for run in runs:
@@ -170,6 +174,7 @@ def metrics_trend():
             continue
         seen.add(thread_id)
         deduped.append(run)
+
     deduped.reverse()
 
     return [
@@ -202,6 +207,29 @@ def verify_github_signature(payload_body: bytes, signature_header: str) -> bool:
     )
     expected_signature = "sha256=" + hash_object.hexdigest()
     return hmac.compare_digest(expected_signature, signature_header)
+
+
+@app.post("/runs/from-url")
+def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
+    try:
+        owner, repo, issue_number = parse_github_url(request.github_issue_url)
+        bug_description = fetch_github_issue(owner, repo, issue_number)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    thread_id = str(uuid.uuid4())
+    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
+
+    initial_state = {
+        "bug_description": bug_description,
+        "human_fix": "",
+        "github_owner": owner,
+        "github_repo": repo,
+        "github_issue_number": issue_number,
+    }
+    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
+
+    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
 
 
 @app.post("/webhook/github")
@@ -372,24 +400,43 @@ def submit_human_fix(run_id: str, request: HumanFixRequest):
         "verdict": result.verdict,
     }
 
-@app.post("/runs/from-url")
-def run_from_url(request: IssueUrlRequest, background_tasks: BackgroundTasks):
-    try:
-        owner, repo, issue_number = parse_github_url(request.github_issue_url)
-        bug_description = fetch_github_issue(owner, repo, issue_number)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
-    thread_id = str(uuid.uuid4())
-    run_status[thread_id] = {"current_node": "starting", "done": False, "error": None}
+@app.get("/repositories")
+def list_repositories():
+    client = mlflow.tracking.MlflowClient()
+    experiment = client.get_experiment_by_name("Default")
+    if experiment is None:
+        return []
 
-    initial_state = {
-        "bug_description": bug_description,
-        "human_fix": "",
-        "github_owner": owner,
-        "github_repo": repo,
-        "github_issue_number": issue_number,
-    }
-    background_tasks.add_task(run_pipeline_background, thread_id, initial_state)
+    runs = client.search_runs(
+        experiment_ids=[experiment.experiment_id],
+        order_by=["start_time DESC"],
+    )
 
-    return {"run_id": thread_id, "thread_id": thread_id, "status": "started"}
+    seen_threads = set()
+    repos = {}
+    for run in runs:
+        thread_id = run.data.tags.get("thread_id", run.info.run_id)
+        if thread_id in seen_threads:
+            continue
+        seen_threads.add(thread_id)
+
+        owner = run.data.params.get("github_owner", "")
+        repo = run.data.params.get("github_repo", "")
+        if not owner or not repo:
+            continue
+
+        key = f"{owner}/{repo}"
+        if key not in repos:
+            repos[key] = {
+                "owner": owner,
+                "repo": repo,
+                "run_count": 0,
+                "trustworthy_count": 0,
+                "last_run_at": run.info.start_time,
+            }
+        repos[key]["run_count"] += 1
+        if run.data.params.get("verdict") == "trustworthy":
+            repos[key]["trustworthy_count"] += 1
+
+    return list(repos.values())

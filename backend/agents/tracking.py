@@ -14,4 +14,7 @@ def log_run(thread_id: str, state: dict):
         mlflow.log_param("ai_fix", state.get("ai_fix", ""))
         mlflow.log_param("human_fix", state.get("human_fix", ""))
         mlflow.log_param("reasoning", state.get("reasoning", ""))
+        mlflow.log_param("github_owner", state.get("github_owner", ""))
+        mlflow.log_param("github_repo", state.get("github_repo", ""))
+        mlflow.log_param("github_issue_number", state.get("github_issue_number", ""))
     return run.info.run_id

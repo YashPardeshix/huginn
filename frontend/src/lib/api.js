@@ -24,6 +24,12 @@ export async function fetchMetricsTrend() {
   return res.json();
 }
 
+export async function fetchRepositories() {
+  const res = await fetch(`${API_BASE}/repositories`);
+  if (!res.ok) throw new Error("Failed to fetch repositories");
+  return res.json();
+}
+
 export async function submitIssueUrl(url) {
   const res = await fetch(`${API_BASE}/runs/from-url`, {
     method: "POST",
