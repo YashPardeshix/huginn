@@ -305,13 +305,14 @@ export default function FixComparison() {
         </p>
       </div>
 
+{/* Public Demo Mode: Uncomment below to re-enable human fix editing
       <HumanFixForm
         runId={runId}
         currentFix={run.human_fix}
         lastResult={{ verdict: run.verdict, similarity_score: run.similarity_score }}
         onSubmitted={reloadRun}
       />
-
+*/}
       {run.pending_approval && (
         <div className="mt-10 border-t border-outline pt-8">
           <div className="font-mono text-xs tracking-widest text-on-surface-muted mb-3">

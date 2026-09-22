@@ -116,6 +116,7 @@ export default function Runs() {
                 <span className="font-mono text-xs text-on-surface-dim">
                   {run.created_at}
                 </span>
+                {/* Public Demo Mode: Uncomment below to re-enable delete
                 <button
                   onClick={(e) => handleDelete(e, run.run_id)}
                   disabled={deletingId === run.run_id}
@@ -124,6 +125,7 @@ export default function Runs() {
                 >
                   {deletingId === run.run_id ? "..." : "✕"}
                 </button>
+                */}
               </div>
             ))}
           </div>
@@ -132,3 +134,4 @@ export default function Runs() {
     </div>
   );
 }
+
