@@ -1,5 +1,8 @@
 # Huginn — Shadow-Mode Agentic Software Engineer
 
+> **Live Dashboard:** Temporarily unavailable — waiting on permanent domain approval (eu.org). Backend runs locally via Docker; a persistent public link will be added here once the domain is live.
+> **Video Walkthrough:** [Watch the demo](https://drive.google.com/file/d/1d1s-WQtBi4zDcu048lkvtFwNUQxbMuTq/view?usp=sharing)
+
 Named after Huginn, one of Odin's two ravens in Norse mythology — sent out to observe the world and report back before any decision is made.
 
 ## What this is
@@ -124,3 +127,4 @@ GITHUB_WEBHOOK_SECRET=your_webhook_secret
 ## Stack
 
 Python · LangGraph · Docker SDK · SQLite (checkpoints & audit) · FastAPI · MLflow · React · Tailwind CSS · Vite · NVIDIA NIM (Nemotron models)
+
