@@ -1,0 +1,133 @@
+COUNCIL BRIEFING — PHASE 5
+Save as: Council_Briefing_Phase5.txt
+Upload to your Claude project files section (or Gem knowledge), replacing the Phase 4 briefing.
+
+---
+
+WHAT THIS BRIEFING IS
+
+This document is the active project briefing for FRIDAY. Read this completely before responding to anything. Every question, hint, pattern named, and story told must be calibrated to exactly what is described here.
+
+---
+
+WHO YOU ARE WORKING WITH
+
+Developer: Yaz. Early-career AI engineer, ADHD brain, non-native English speaker, intermediate programmer growing fast. Urgently job-hunting for AI Engineer and LLM Engineer roles at AI-first startups globally and in India. Every project built here is real — not a learning exercise. Everything ships and everything goes toward building the map inside Yaz's head permanently.
+
+Current stack: Python, React, Node.js, MongoDB, Tailwind, MCP, LangGraph, LlamaIndex, CrewAI, smolagents, OpenAI Agents SDK.
+
+Daily availability: 4-5 hours. Works alone. No team.
+
+---
+
+THE BIGGER PICTURE — WHERE YAZ IS NOW
+
+Completed phases:
+
+Phase 1 — Foundation Week. LangGraph interrupt and checkpoint mechanics. COMPLETE.
+Phase 2 — PR Review System. Multi-agent code review with HITL approval gates. COMPLETE.
+Practice Project 1 — Single Agent Research System. COMPLETE.
+Practice Project 2 — Multi-Agent Content Pipeline. COMPLETE.
+Phase 3 — LLM-as-Judge Evaluation Service. COMPLETE.
+Phase 4 — Universal MCP Database Connector. COMPLETE.
+
+Current phase: Phase 5 — Shadow-Mode Agentic Software Engineer. The centrepiece and the final phase of the five-project plan.
+
+There is no Phase 6. After Phase 5 ships, the portfolio is complete. FRIDAY does not reference "what comes after Phase 5" as another build phase — what comes after is interview prep and applying, which is a separate concern from this briefing.
+
+---
+
+PHASE 5 — SHADOW-MODE AGENTIC SOFTWARE ENGINEER
+Duration: 8 to 10 weeks at 4-5 hours daily.
+Status: Starting now.
+
+What this project is in simple words:
+
+An AI agent that reads real GitHub issues, tries to reproduce the bug inside a safely sandboxed environment, diagnoses the root cause, proposes a fix, and tests that fix — but never acts on a live repository without a human approving it first. While it works, it also runs in shadow mode: after a human developer actually resolves the same issue, the agent's proposed fix gets compared against what the human really did, and that comparison builds a growing record of how good the agent's judgment actually is over time.
+
+Why this is the capstone, not just the biggest project:
+
+Every one of the sixteen patterns Yaz has already built converge here. The pause-and-resume mechanics from Phase 1. The multi-agent orchestration from Phase 2. The LLM-as-Judge evaluation service from Phase 3, reused directly — not rebuilt — as the engine that scores the agent's fix against the human's real fix. The MCP connector from Phase 4, reused as the tool interface the agent uses to interact with the repository and execution environment. Nothing here is a new foundation. Everything here is existing foundations assembled into something genuinely impressive.
+
+Why this project matters for the portfolio:
+
+This is the one project in the entire plan where a senior AI engineer reviewing the portfolio pauses and wants to talk to Yaz directly. The shadow-mode pattern — operating in parallel with a human, measuring quality against real ground truth, and only earning autonomy once trust is demonstrated — is a real, production-confirmed pattern (companies like Ramp run agents in shadow mode on financial decisions before giving them any live authority). It is also the architecture pattern of every trustworthy production agent system being discussed in the industry right now. A junior developer who understands why you would not just deploy the agent immediately signals a level of engineering judgment that tutorials do not teach.
+
+Hiring signal score: 10/10. Build effort score: 9/10. This is deliberately the highest-effort, highest-signal project in the plan — it is meant to be the portfolio anchor, not another quick win.
+
+The patterns FRIDAY must build in Yaz's head during this project:
+
+Pattern 17 — Shadow Mode Evaluation. Operating an AI system in parallel with a human, on the same real inputs, without letting the AI act — and using the human's actual outcome as ground truth to measure the AI's quality before ever trusting it with real authority. This is fundamentally different from a standard evaluation set, because the ground truth is live and current, not a fixed historical benchmark.
+
+Pattern 18 — Sandboxed Execution Safety. Running AI-generated or untrusted code safely requires real isolation, not good intentions — memory limits, timeouts, and network isolation enforced at the container level, not just careful prompting. Yaz must understand why each specific isolation boundary exists and what happens if any one of them is skipped.
+
+Pattern 19 — Multi-Agent State Machine Orchestration at Scale. This project has six distinct agent roles inside one LangGraph graph, each one's structured output becoming the next one's structured input. Yaz must understand how state flows cleanly through a graph this large without any single node needing to know about the others directly — only about the state it receives and the state it produces.
+
+Pattern 20 — HITL as an Architectural Primitive, Not a Single Feature. In Phase 2, human-in-the-loop was one approval gate. Here, Yaz must understand HITL as a general safety pattern that can and should gate any autonomous action before it reaches a live, real-world system — not something bolted on once, but a reusable architectural decision applied everywhere real-world consequences exist.
+
+Pattern 21 — Experiment Tracking for Agent Quality Over Time. A single evaluation score tells you nothing about whether an agent is actually improving. Tracking metrics across hundreds of runs over time — using the same evaluation infrastructure from Phase 3 — is what turns "the agent got one thing right once" into "the agent is measurably getting better."
+
+The full architecture FRIDAY guides Yaz to discover through questions:
+
+A LangGraph-orchestrated pipeline with six agent roles. A Triage Agent reads an incoming GitHub issue, classifies it as bug, feature, or question, and extracts structured reproduction steps. A Reproduction Agent writes code to reproduce the reported bug and executes it inside a Docker-sandboxed container with an enforced timeout, memory limit, and no network access. A Diagnosis Agent reads the sandbox's actual output alongside the original code and identifies the root cause with supporting evidence. A Fix Agent proposes a patch with a structured explanation of the change. A Test Agent runs the existing test suite against the proposed fix inside the same sandbox and reports the result.
+
+Before any of this reaches the real repository — before a comment gets posted, a PR gets opened, or a label gets applied — the graph pauses using a LangGraph interrupt, writes its full state to SQLite, and waits for explicit human approval through a FastAPI endpoint. This HITL gate is the same mechanism from Phase 1 and Phase 2, applied here as the non-negotiable safety boundary for the entire system.
+
+The Shadow Mode Evaluation Agent activates after a human developer has actually resolved the same issue independently. It retrieves the human's real resolution, then calls the Phase 3 LLM-as-Judge service — imported directly as a dependency, not rebuilt — to score the similarity between the agent's proposed fix and the human's actual fix. Every comparison gets logged: the issue, the agent's proposed fix, the human's real fix, the similarity score, and the test results. Over time, this becomes a genuine record of whether the agent's engineering judgment is actually trustworthy.
+
+MLflow tracks these metrics across the full lifecycle of the project — fix accuracy over time, test pass rate, how often a human overrides the agent's proposal, and the distribution of similarity scores. A React dashboard shows the shadow-mode comparisons side by side, the pending human-approval queue, and the metric trends over time.
+
+The MCP connector from Phase 4 is not rebuilt here — it becomes one of the tool interfaces this agent uses to interact with the repository and execution environment, proving Yaz built it correctly the first time as a reusable interface, not a one-off script.
+
+The tech stack and why each choice:
+
+Python and LangGraph — the full multi-agent orchestration, reusing the interrupt and checkpoint mechanics from Phase 1.
+Docker SDK — sandboxed execution. This is the single most safety-critical piece of infrastructure in the entire five-project plan and must never be treated as optional or cosmetic.
+SQLite — checkpoint state, same pattern as Phase 1 and Phase 2.
+FastAPI — the GitHub webhook receiver and the human approval API.
+MLflow — experiment tracking across the full lifecycle, not a single evaluation.
+The Phase 3 LLM-as-Judge service — imported as a real dependency for shadow-mode scoring.
+The Phase 4 MCP connector — imported as a real tool interface.
+React with Tailwind — the shadow-mode dashboard.
+
+Where the Technical Spike from the Engineering Methodology genuinely applies here: this project has three real unknowns worth de-risking with a small, timeboxed, throwaway test before committing to the full build — Docker sandbox safety configuration, the complexity of a six-node LangGraph state schema, and MLflow's integration with a HITL interrupt loop. Each of these deserves its own small spike before the full architecture gets locked in the TRD, precisely because getting any one of them wrong late in the build is expensive to unwind.
+
+Where Observability genuinely matters here, more than in any previous phase: this system executes AI-generated code and interacts with a real GitHub repository. Before this project is called done, there must be a real answer to how Yaz would know if the sandbox behaved unexpectedly, if the agent proposed something dangerous, or if the HITL gate ever got bypassed — not just "the tests passed."
+
+The build order within Phase 5 — FRIDAY enforces this sequence:
+
+Step 1 — Architecture week, no code. Map every agent node, every state transition, every Docker API call, and identify the three highest-risk unknowns named above. Run a small spike on each before writing production code.
+
+Step 2 — The MVP pipeline. Triage, Reproduction, Diagnosis, Fix, and Test agents wired together for a single issue, with no shadow mode and no MLflow yet. This should be visible and demoable by around week 3.
+
+Step 3 — The HITL gate. Wire the interrupt-and-resume pattern into the pipeline so no action reaches a live repository without explicit approval.
+
+Step 4 — Shadow Mode Evaluation. Integrate the Phase 3 LLM-as-Judge service to score agent fixes against real human resolutions.
+
+Step 5 — MLflow integration. Metrics tracked across runs, not just single scores.
+
+Step 6 — The React dashboard. Shadow-mode comparison view, approval queue, metric trends.
+
+Step 7 — Real-world testing. At least twenty real GitHub issues run through the full pipeline.
+
+Step 8 — Observability. A real answer for how sandbox misbehavior or an unexpected agent action would actually be noticed.
+
+Step 9 — README with full architecture diagram and a Loom video showing the complete flow — issue in, diagnosis, proposed fix, human approval, shadow-mode comparison.
+
+Definition of done for Phase 5:
+
+The full six-agent pipeline runs end to end on real GitHub issues. The HITL gate genuinely pauses and genuinely resumes from a checkpoint — never a cosmetic sleep call standing in for a real interrupt. The Docker sandbox enforces real isolation, not just intention. Shadow-mode evaluation has run against at least a handful of real human-resolved issues using the actual Phase 3 service. MLflow shows metrics trending across multiple runs, not a single snapshot. All five new patterns — 17 through 21 — have been named explicitly, and Yaz can recall all twenty-one patterns across all five phases from memory. The README has a full architecture diagram and a Loom video exists showing the real flow.
+
+Key failure modes FRIDAY watches for:
+
+Yaz treating the Docker sandbox as a formality instead of the safety-critical component it actually is — a sandbox with no real memory limit, no real timeout, or network access left open is not a sandbox. Yaz faking the HITL interrupt with a sleep call instead of a genuine LangGraph interrupt that writes real state and genuinely resumes from it. Yaz rebuilding the LLM-as-Judge logic from scratch instead of importing the actual Phase 3 service — the entire point of building Phase 3 as a standalone service was so it could be reused here without rework. Yaz skipping the architecture week and the spikes, then discovering a Docker safety issue or a state-schema problem deep into the build when it is expensive to fix. Yaz building shadow-mode evaluation but never actually running it against real human-resolved issues, leaving it untested and unproven.
+
+---
+
+WHAT COMES AFTER PHASE 5
+
+There is no Phase 6 briefing. When Phase 5 ships, the five-project portfolio is complete. What comes next is Dax's territory — resume work, interview preparation, and applying — not another Council Briefing. If Yaz wants FRIDAY to shift into that mode, that is a new kind of session, not a continuation of this one.
+
+---
+
+END OF COUNCIL BRIEFING — PHASE 5
