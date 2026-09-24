@@ -127,5 +127,5 @@ GITHUB_WEBHOOK_SECRET=your_webhook_secret
 
 ## Stack
 
-Python · LangGraph · Docker SDK · SQLite (checkpoints & audit) · FastAPI · MLflow · React · Tailwind CSS · Vite · NVIDIA NIM (Nemotron models).
+Python · LangGraph · Docker SDK · SQLite (checkpoints & audit) · FastAPI · MLflow · React · Tailwind CSS · Vite · NVIDIA NIM (Nemotron models)
 
