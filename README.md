@@ -125,7 +125,7 @@ GITHUB_TOKEN=your_github_personal_access_token
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
 ```
 
-## Stack.
+## Stack
 
 Python · LangGraph · Docker SDK · SQLite (checkpoints & audit) · FastAPI · MLflow · React · Tailwind CSS · Vite · NVIDIA NIM (Nemotron models)
 
