@@ -1,4 +1,4 @@
-# Huginn — Shadow-Mode Agentic Software Engineer.
+# Huginn — Shadow-Mode Agentic Software Engineer
 
 > **Live Dashboard:** Temporarily unavailable — waiting on permanent domain approval (eu.org). Backend runs locally via Docker; a persistent public link will be added here once the domain is live.
 
