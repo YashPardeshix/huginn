@@ -1,6 +1,6 @@
 # Huginn — Shadow-Mode Agentic Software Engineer
 
-> **Live Dashboard:** Temporarily unavailable — waiting on permanent domain approval (eu.org). Backend runs locally via Docker; a persistent public link will be added here once the domain is live.
+> **Live Dashboard:** Temporarily unavailable — waiting on permanent domain approval (eu.org). Backend runs locally via Docker; a persistent public link will be added here once the domain is live..
 
 > **Video Walkthrough:** [Watch the demo](https://drive.google.com/file/d/1d1s-WQtBi4zDcu048lkvtFwNUQxbMuTq/view?usp=sharing)
 
