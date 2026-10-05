@@ -13,7 +13,7 @@ Huginn is a six-agent AI pipeline that reads a real GitHub issue, reproduces the
 **The core idea:** don't trust an AI agent's judgment because it sounds confident. Trust it because you've measured it, over real issues, against real human outcomes, and it's earned that trust with evidence.
 
 This is the same pattern real engineering organizations use before giving an AI system live authority — shadow mode first, autonomy later, and only if the evidence supports it. It is deliberately the highest-effort, highest-signal project in a five-project portfolio.
-.
+
 ## Architecture
 
 ```mermaid
