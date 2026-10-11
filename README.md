@@ -76,10 +76,10 @@ Every completed run is logged to MLflow — `similarity_score`, `verdict`, `fix_
 
 **Result after real-world testing on 20 distinct GitHub issues:**
 
-- Total Runs: 20
+- Total Runs: 22
 - Average Similarity Score: 0.87
-- Trustworthy Rate: 80% (16 of 20 runs)
-- Needs Human Rework Rate: 20% (4 of 20 runs)
+- Trustworthy Rate: 82% (18 of 22 runs)
+- Needs Human Rework Rate: 18% (4 of 22 runs)
 
 The evaluation suite tested across 13 distinct bug classes (sign inversions, recursion base cases, off-by-one slice bounds, in-place iteration side effects, unhashable dictionary keys, binary search boundaries, and stack imbalances). The judge demonstrated semantic discernment — flagging in-place list mutation as rework despite identical test outputs.
 
